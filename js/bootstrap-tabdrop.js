@@ -20,7 +20,7 @@
  
 !function( $ ) {
 
-	var WinReszier = (function(){
+	var WinResizer = (function(){
 		var registered = [];
 		var inited = false;
 		var timer;
@@ -55,70 +55,106 @@
 	var TabDrop = function(element, options) {
 		this.element = $(element);
 		this.options = options;
-		this.dropdown = $('<li class="dropdown hide pull-right tabdrop"><a class="dropdown-toggle" data-toggle="dropdown" href="#">'+options.text+' <b class="caret"></b></a><ul class="dropdown-menu"></ul></li>')
-							.prependTo(this.element);
-		if (this.element.parent().is('.tabs-below')) {
-			this.dropdown.addClass('dropup');
-		}
-		WinReszier.register($.proxy(this.layout, this));
+        this.dropdown = $('<div class="btn-group hide tabdrop"><button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">'+options.text+'\n<span class="caret"></span></button><ul class="dropdown-menu"></ul></div>').appendTo(this.element);
+        this.setMirror();
+		WinResizer.register($.proxy(this.layout, this));
 		this.layout();
 	};
 
 	TabDrop.prototype = {
 		constructor: TabDrop,
+        
+        setMirror: function() {
+            this.element.find('>.btn-group').not('.tabdrop').each(function(){
+                var $group = $(this);
+                var mirrorStr = '';
+                
+                $group.children().each(function(){
+                    var groupElem = this;
+                    var $groupElem = $(this);
+                    var tag = groupElem.tagName;
+                    var str = '';
+                    switch (tag) {
+                        case 'A':
+                            //a entry
+                            str = '<li><a href="' + groupElem.getAttribute('href') + '">' + $groupElem.text() + '</a></li>';
+                            break;
+                        case 'BUTTON':
+                            //a header
+                            var txt = $groupElem.text().trim();
+                            if (txt != '') {
+                                str = '<li class="dropdown-header">' + txt + '</li>';
+                            }
+                            break;
+                        case 'UL':
+                            if ($groupElem.hasClass('dropdown-menu')) {
+                                //all childs add in
+                                $groupElem.find('>li>a').each(function(){
+                                    str += '<li><a href="' + this.getAttribute('href') + '">' + this.text + '</a></li>';
+                                });
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                    mirrorStr += str;
+                });
+                
+                //append as data
+                $group.data('dropElem', $(mirrorStr));
+            })
+        },
 
 		layout: function() {
-			var collection = [];
-			var dropdown = this.dropdown;
 			var options = this.options;
+			var dropdown = this.dropdown;
+            var dpMenu = dropdown.find(".dropdown-menu");
+            var groups = this.element.find('>.btn-group').not('.tabdrop');
 
-			this.dropdown.removeClass('hide');
+            var sendToDropdown = function (group, method) {
+                var send = function (elem) {
+                    switch (method) {
+                        case 'prepend':
+                            dpMenu.prepend(elem);
+                            break;
+                        case 'append':
+                        default:
+                            dpMenu.append(elem);
+                            break;
+                    }
+                }
 
-			function setDropdownText(text) {
-				dropdown.find('a.dropdown-toggle').html('<span class="display-tab"> ' + text + ' </span><b class="caret"></b>');
-			}
+                group.addClass('hide');
+                //add mirror to dropdown
+                if (!dpMenu.is(':empty')) {
+                    var divid = $('<li class="divider">');
+                    send(divid);
+                }
+                var dropElem = group.data('dropElem');
+                send(dropElem);
+            }
 
-			function setDropdownDefaultText() {
-				dropdown.find('a.dropdown-toggle').html(options.text+' <b class="caret"></b>');
-			}
+			/* reset toolbar */
+            dropdown.removeClass('hide');
+            dpMenu.empty();
+            groups.removeClass('hide');
 
-			this.element
-				.append(this.dropdown.find('li'))
-				.find('>li')
-				.not('.tabdrop')
-				.each(function(){
-					if(this.offsetTop > options.offsetTop) {
-						collection.push(this);
-					}
-				});
-
-			this.element.find('>li').not('.tabdrop').off("click");
-			this.element.find('>li').not('.tabdrop').on("click", function() {
-				setDropdownDefaultText();
-			});
-
-			if (collection.length > 0) {
-				collection = $(collection);
-				this.dropdown
-					.find('ul')
-					.empty()
-					.append(collection);
-				
-				this.dropdown.on("click", "li", function(event){
-					var display = $(this).text();
-					setDropdownText(display);
-				});
-
-				if (this.dropdown.find('.active').length == 1) {
-					this.dropdown.addClass('active');
-					setDropdownText(this.dropdown.find('.active > a').text());
-				} else {
-					this.dropdown.removeClass('active');
-					setDropdownDefaultText();
-				}
-			} else {
-				this.dropdown.addClass('hide');
-			}
+            /* overflown to placeholder */
+            groups.each(function(){
+                if (this.offsetTop > options.offsetTop) {
+                    sendToDropdown($(this), 'append');
+                }
+            });
+            /* hide drop if no element */
+            /* if has element, check moredrop offset */
+            if (dpMenu.is(':empty')) {
+                dropdown.addClass('hide');
+            } else {
+                while (dropdown.get(0).offsetTop > options.offsetTop) {
+                    var lastGroup = groups.not('.hide').last();
+                    sendToDropdown(lastGroup, 'prepend');
+                }
+            }
 		}
 	}
 
@@ -137,7 +173,7 @@
 	};
 
 	$.fn.tabdrop.defaults = {
-		text: '<i class="fa fa-align-justify"></i>',
+		text: 'More...',
 		offsetTop: 0
 	};
 
